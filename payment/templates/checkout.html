@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Checkout</title>
+</head>
+<body>
+
+<!--<button id="rzp-button1">Pay with Razorpay</button>-->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+var options = {
+    "key": "{{ data.key_id }}", // Enter the Key ID generated from the Dashboard
+    "amount": "{{ data.amount }}", // Amount is in currency subunits. Default currency is INR. Hence, 50000 refers to 50000 paise
+    "currency": "INR",
+    "name": "Lava OTT",
+    "description": "Test Transaction",
+    "image": "",
+    "order_id": "{{ data.id }}", //This is a sample Order ID. Pass the `id` obtained in the response of Step 1
+    "callback_url": "{{ data.response_url }}",
+    "prefill": {
+        // "name": "user",
+        // "email": "user@example.com",
+        // "contact": "{{ data.contact }}"
+    },
+    "notes": {
+        "address": "Razorpay Corporate Office"
+    },
+    "theme": {
+        "color": "#3399cc"
+    }
+};
+console.log('options = ', options);
+var rzp1 = new Razorpay(options);
+rzp1.open();
+// e.preventDefault();
+// document.getElementById('rzp-button1').onclick = function(e){
+//     rzp1.open();
+//     e.preventDefault();
+// }
+</script>
+
+</body>
+</html>

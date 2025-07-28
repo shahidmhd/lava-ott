@@ -1,0 +1,26 @@
+../env/
+venv/
+env/
+
+.idea
+db.sqlite3
+*.pyc
+*.pyo
+
+# Media files
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.mp4
+*.avi
+
+lava_ott/lava_ott/settings/.dj-env
+lava_ott/lavaott_media
+
+__pycache__/
+
+*.py[cod]
+*$py.class
+
+*.spec

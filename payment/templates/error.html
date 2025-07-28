@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Failed</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f4f4f9;
+      margin: 0;
+    }
+    .container {
+      text-align: center;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      width: 90%;
+      max-width: 400px;
+    }
+    .container img {
+      width: 150px;
+      height: auto;
+      margin-bottom: 20px;
+    }
+    .btn {
+      padding: 10px 20px;
+      background-color: #f44336;
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      transition: background-color 0.3s ease;
+    }
+    .btn:hover { background-color: #e53935; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="https://cdn.dribbble.com/users/2469324/screenshots/6538803/comp_3.gif" alt="Error GIF">
+    {% if main_msg %}
+    <h1>{{ main_msg }}</h1>
+    {% else %}
+    <h1>Payment Failed</h1>
+    {% endif %}
+    {% if err_msg %}
+    <p>{{ err_msg }}</p>
+    {% else %}
+    <p>Oops! Something went wrong. Please try again.</p>
+    {% endif %}
+    <a href="https://www.lavaott.com/" class="btn">Go to Home</a>
+  </div>
+</body>
+</html>
