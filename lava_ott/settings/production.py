@@ -81,7 +81,7 @@ BY_PASS_VERIFY = False
 #     "key_id": '79818249a83e188184b2d75955281897',
 #     "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237'
 # }
-# Production Cashfree Configuration
+# Production settings
 PAYMENT_URL_CONFIG = {
     'base_url': 'https://api.lavaott.com/',
     'response_url': 'https://api.lavaott.com/payment/response/',
@@ -92,10 +92,9 @@ PAYMENT_URL_CONFIG = {
 PAYMENT_CONFIG = {
     "key_id": '79818249a83e188184b2d75955281897',
     "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',
-    "test_mode": False,  # Try sandbox first
-    "api_version": "2022-09-01"  # Try this version instead
+    "test_mode": False,  # Production mode
+    "api_version": "2022-09-01"
 }
-
 # PAYMENT_CONFIG = {
 #     "key_id": 'rzp_live_KNVLFuRdQHF0Lu',
 #     "key_secret": 'jCmtb49N4bUK7qnuEsE31a2e'

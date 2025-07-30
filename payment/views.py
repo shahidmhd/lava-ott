@@ -28,7 +28,7 @@ def mock_cashfree_api(endpoint, method='GET', **kwargs):
     if method == 'POST' and 'orders' in endpoint:
         payload = kwargs.get('json', {})
         # Use the order_id from the payload (this comes from Transaction.generate_receipt())
-        mock_order_id = payload.get('order_id', f'order_mock_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}')
+        mock_order_id = payload.get('order_id', f'order_prod_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}')
         return {
             'status_code': 201,  # Cashfree returns 201 for successful order creation
             'json': {
@@ -40,11 +40,11 @@ def mock_cashfree_api(endpoint, method='GET', **kwargs):
                 'order_currency': payload.get('order_currency', 'INR'),
                 'order_expiry_time': (datetime.datetime.now() + timedelta(minutes=15)).isoformat(),
                 'order_id': mock_order_id,  # Use the same order_id from the request
-                'order_meta': {'return_url': 'http://127.0.0.1:8000/payment/response/'},
+                'order_meta': {'return_url': 'https://api.lavaott.com/payment/response/'},
                 'order_note': payload.get('order_note', ''),
                 'order_status': 'ACTIVE',
                 'order_tags': None,
-                'payment_session_id': f'session_mock_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}'
+                'payment_session_id': f'session_prod_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}'
             }
         }
     elif method == 'GET' and 'orders' in endpoint:
@@ -84,7 +84,7 @@ def make_cashfree_request(url, method='GET', **kwargs):
         'Content-Type': 'application/json',
         'x-client-id': config['key_id'],
         'x-client-secret': config['key_secret'],
-        'x-api-version': '2022-09-01'  # Cashfree requires API version
+        'x-api-version': '2022-09-01'  # Try older API version
     })
     kwargs['headers'] = headers
     kwargs['timeout'] = kwargs.get('timeout', 30)

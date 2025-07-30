@@ -179,9 +179,11 @@
             <input type="hidden" name="order_currency" value="{{ data.order_currency|default:'INR' }}">
             
             <!-- Mock payment fields for successful payment simulation -->
-            <input type="hidden" name="cf_payment_id" value="pay_mock_{{ data.order_id }}">
+            <input type="hidden" name="cf_payment_id" value="pay_mock_{{ data.order_id }}_{{ "now"|date:"YmdHis" }}">
             <input type="hidden" name="order_status" value="PAID">
             <input type="hidden" name="payment_status" value="SUCCESS">
+            <input type="hidden" name="payment_method" value="CARD">
+            <input type="hidden" name="payment_time" value="{{ "now"|date:"Y-m-d H:i:s" }}">
             
             <button type="submit" class="pay-button" id="pay-now-btn">
                 Pay ₹{{ data.order_amount|floatformat:0 }} Securely
@@ -248,11 +250,15 @@
                 payButton.style.display = 'none';
                 loading.style.display = 'block';
                 
+                // Add debug logging
+                console.log('Form submission started');
+                console.log('Form action:', form.action);
+                console.log('Order ID:', '{{ data.order_id }}');
+                
                 // Simulate payment processing delay
                 setTimeout(function() {
                     console.log('Processing CacheFree payment...');
-                    console.log('Order ID:', paymentOptions.order_id);
-                    console.log('Amount:', paymentOptions.amount);
+                    console.log('Submitting form to:', form.action);
                     
                     // Submit the form (this will send the mock payment data to your response handler)
                     form.submit();
