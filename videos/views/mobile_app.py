@@ -37,7 +37,7 @@ class VideoListAppView(APIView):
 class OrderCreateView(APIView):
     def post(self, request):
         user = request.customuser
-
+        print('User =', user)
         if user.has_subscription() is True:
             return add_error_response({'error': 'User is already subscriber'}, status=400)
 
