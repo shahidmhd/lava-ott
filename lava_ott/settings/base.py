@@ -68,7 +68,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
     # local
-    'users.middleware.CustomMiddleWare',
+    # 'users.middleware.CustomMiddleWare',
 ]
 
 ROOT_URLCONF = 'lava_ott.urls'
@@ -243,13 +243,28 @@ BY_PASS_VERIFY = True
 #     'response_url': 'http://127.0.0.1:8000/payment/response/',
 #     'order_create_url': 'http://127.0.0.1:8000/mock/api/v1/orders'  # Mock endpoint
 # }
+# PAYMENT_URL_CONFIG = {
+#     'base_url': 'https://api.lavaott.com/',
+#     'response_url': 'https://api.lavaott.com/payment/response/',
+#     'order_create_url': 'https://api.cachefree.com/v1/orders'
+# }
+
+# PAYMENT_CONFIG = {
+#     "key_id": '79818249a83e188184b2d75955281897',
+#     "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237'
+# }
+
+# Production Cashfree Configuration
 PAYMENT_URL_CONFIG = {
     'base_url': 'https://api.lavaott.com/',
     'response_url': 'https://api.lavaott.com/payment/response/',
-    'order_create_url': 'https://api.cachefree.com/v1/orders'
+    'sandbox_api_url': 'https://sandbox.cashfree.com/pg/orders',
+    'production_api_url': 'https://api.cashfree.com/pg/orders'
 }
 
 PAYMENT_CONFIG = {
-    "key_id": '79818249a83e188184b2d75955281897',
-    "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237'
+    "key_id": '79818249a83e188184b2d75955281897',  # Your Cashfree App ID
+    "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',  # Your Cashfree Secret Key
+    "test_mode": False,  # Set to False for production
+    "api_version": "2023-08-01"
 }

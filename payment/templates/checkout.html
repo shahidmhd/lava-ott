@@ -147,40 +147,44 @@
         <div class="order-details">
             <div class="detail-row">
                 <span class="detail-label">Service:</span>
-                <span class="detail-value">{{ data.name|default:"Lava OTT Subscription" }}</span>
+                <span class="detail-value">Lava OTT Subscription</span>
             </div>
             <div class="detail-row">
                 <span class="detail-label">Description:</span>
-                <span class="detail-value">{{ data.description|default:"Premium Subscription" }}</span>
+                <span class="detail-value">Premium Subscription</span>
             </div>
             <div class="detail-row">
                 <span class="detail-label">Order ID:</span>
-                <span class="detail-value">{{ data.id }}</span>
+                <span class="detail-value">{{ data.order_id }}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Customer:</span>
+                <span class="detail-value">{{ data.customer_details.customer_email|default:"Guest" }}</span>
             </div>
             <div class="divider"></div>
             <div class="detail-row">
                 <span class="detail-label">Amount:</span>
-                <span class="detail-value amount">₹{{ data.amount }}</span>
+                <span class="detail-value amount">₹{{ data.order_amount|floatformat:0 }}</span>
             </div>
         </div>
 
         <!-- CacheFree Payment Form -->
-        <form id="cachefree-payment-form" method="POST" action="{{ data.response_url }}">
+        <form id="cachefree-payment-form" method="POST" action="{{ data.return_url }}">
             {% csrf_token %}
             
             <!-- Hidden fields for CacheFree integration -->
             <input type="hidden" name="key_id" value="{{ data.key_id }}">
-            <input type="hidden" name="order_id" value="{{ data.id }}">
-            <input type="hidden" name="amount" value="{{ data.amount }}">
-            <input type="hidden" name="currency" value="{{ data.currency|default:'INR' }}">
+            <input type="hidden" name="order_id" value="{{ data.order_id }}">
+            <input type="hidden" name="order_amount" value="{{ data.order_amount }}">
+            <input type="hidden" name="order_currency" value="{{ data.order_currency|default:'INR' }}">
             
-            <!-- Mock payment fields (remove these when integrating real CacheFree) -->
-            <input type="hidden" name="cachefree_payment_id" value="pay_mock_{{ data.id }}">
-            <input type="hidden" name="cachefree_order_id" value="{{ data.id }}">
-            <input type="hidden" name="cachefree_signature" value="mock_signature_{{ data.id }}">
+            <!-- Mock payment fields for successful payment simulation -->
+            <input type="hidden" name="cf_payment_id" value="pay_mock_{{ data.order_id }}">
+            <input type="hidden" name="order_status" value="PAID">
+            <input type="hidden" name="payment_status" value="SUCCESS">
             
             <button type="submit" class="pay-button" id="pay-now-btn">
-                Pay ₹{{ data.amount }} Securely
+                Pay ₹{{ data.order_amount|floatformat:0 }} Securely
             </button>
             
             <div class="loading" id="loading">
@@ -199,26 +203,36 @@
     </div>
 
     <script>
+        console.log('Checkout Data:', {
+            order_id: '{{ data.order_id }}',
+            order_amount: '{{ data.order_amount }}',
+            payment_session_id: '{{ data.payment_session_id }}',
+            key_id: '{{ data.key_id }}',
+            environment: '{{ data.environment }}',
+            return_url: '{{ data.return_url }}'
+        });
+
         // CacheFree Payment Integration
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('cachefree-payment-form');
             const payButton = document.getElementById('pay-now-btn');
             const loading = document.getElementById('loading');
             
-            // Payment options (similar to Razorpay structure)
+            // Payment options for CacheFree
             const paymentOptions = {
                 "key": "{{ data.key_id }}",
-                "amount": "{{ data.amount }}00", // Convert to paise
-                "currency": "{{ data.currency|default:'INR' }}",
+                "amount": "{{ data.order_amount }}",
+                "currency": "{{ data.order_currency|default:'INR' }}",
                 "name": "Lava OTT",
-                "description": "{{ data.description|default:'Premium Subscription' }}",
-                "order_id": "{{ data.id }}",
-                "callback_url": "{{ data.response_url }}",
+                "description": "Premium Subscription",
+                "order_id": "{{ data.order_id }}",
+                "callback_url": "{{ data.return_url }}",
+                "payment_session_id": "{{ data.payment_session_id }}",
+                "environment": "{{ data.environment|default:'sandbox' }}",
                 "prefill": {
-                    // Add user details if available
-                    // "name": "{{ user.name|default:'' }}",
-                    // "email": "{{ user.email|default:'' }}",
-                    // "contact": "{{ user.phone|default:'' }}"
+                    "name": "{{ data.customer_details.customer_name|default:'' }}",
+                    "email": "{{ data.customer_details.customer_email|default:'' }}",
+                    "contact": "{{ data.customer_details.customer_phone|default:'' }}"
                 },
                 "theme": {
                     "color": "#667eea"
@@ -234,57 +248,55 @@
                 payButton.style.display = 'none';
                 loading.style.display = 'block';
                 
-                // Simulate payment processing delay (remove in production)
+                // Simulate payment processing delay
                 setTimeout(function() {
-                    // In real CacheFree integration, you would call their payment SDK here
-                    // For now, we'll submit the form to simulate successful payment
-                    
                     console.log('Processing CacheFree payment...');
                     console.log('Order ID:', paymentOptions.order_id);
                     console.log('Amount:', paymentOptions.amount);
                     
-                    // Submit the form (this will trigger the success flow)
+                    // Submit the form (this will send the mock payment data to your response handler)
                     form.submit();
                 }, 2000);
                 
-                // TODO: Replace with real CacheFree SDK integration
-                // Example of how it might look:
+                // TODO: Replace with real CacheFree SDK integration when going live
                 /*
-                if (typeof CacheFree !== 'undefined') {
-                    const cachefree = new CacheFree({
-                        key: paymentOptions.key
+                // Real CacheFree integration would look like this:
+                if (typeof Cashfree !== 'undefined' && paymentOptions.payment_session_id) {
+                    const cashfree = Cashfree({
+                        mode: paymentOptions.environment
                     });
                     
-                    cachefree.createPayment({
-                        amount: paymentOptions.amount,
-                        currency: paymentOptions.currency,
-                        order_id: paymentOptions.order_id,
-                        callback_url: paymentOptions.callback_url,
-                        prefill: paymentOptions.prefill
-                    }).then(function(response) {
-                        // Handle successful payment
-                        console.log('Payment successful:', response);
-                        window.location.href = paymentOptions.callback_url;
+                    cashfree.checkout({
+                        paymentSessionId: paymentOptions.payment_session_id,
+                        redirectTarget: "_self"
+                    }).then(function(result) {
+                        if (result.error) {
+                            console.error('Payment failed:', result.error);
+                            alert('Payment failed: ' + result.error.message);
+                            payButton.style.display = 'block';
+                            loading.style.display = 'none';
+                        } else {
+                            console.log('Payment successful:', result);
+                            // Cashfree will handle the redirect automatically
+                        }
                     }).catch(function(error) {
-                        // Handle payment error
-                        console.error('Payment failed:', error);
+                        console.error('Cashfree checkout error:', error);
                         alert('Payment failed. Please try again.');
                         payButton.style.display = 'block';
                         loading.style.display = 'none';
                     });
                 } else {
-                    // Fallback for testing
+                    // Fallback for testing/mock mode
                     form.submit();
                 }
                 */
             });
         });
         
-        // Auto-open payment (similar to Razorpay auto-open)
-        // Uncomment if you want automatic payment popup
-        // window.addEventListener('load', function() {
-        //     document.getElementById('pay-now-btn').click();
-        // });
+        // Auto-focus on pay button when page loads
+        window.addEventListener('load', function() {
+            document.getElementById('pay-now-btn').focus();
+        });
     </script>
 </body>
 </html>

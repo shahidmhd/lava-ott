@@ -72,14 +72,28 @@ BY_PASS_VERIFY = False
 # SECURE_SSL_REDIRECT = True
 
 
+# PAYMENT_URL_CONFIG = {
+#     'base_url': 'https://api.lavaott.com/',
+#     'response_url': 'https://api.lavaott.com/payment/response/',
+#     'order_create_url': 'https://api.cachefree.com/v1/orders'
+# }
+# PAYMENT_CONFIG = {
+#     "key_id": '79818249a83e188184b2d75955281897',
+#     "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237'
+# }
+# Production Cashfree Configuration
 PAYMENT_URL_CONFIG = {
     'base_url': 'https://api.lavaott.com/',
     'response_url': 'https://api.lavaott.com/payment/response/',
-    'order_create_url': 'https://api.cachefree.com/v1/orders'
+    'sandbox_api_url': 'https://sandbox.cashfree.com/pg/orders',
+    'production_api_url': 'https://api.cashfree.com/pg/orders'
 }
+
 PAYMENT_CONFIG = {
-    "key_id": '79818249a83e188184b2d75955281897',
-    "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237'
+    "key_id": '79818249a83e188184b2d75955281897',  # Your Cashfree App ID
+    "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',  # Your Cashfree Secret Key
+    "test_mode": False,  # Set to False for production
+    "api_version": "2023-08-01"
 }
 
 # PAYMENT_CONFIG = {
