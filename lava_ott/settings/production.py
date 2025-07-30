@@ -77,9 +77,12 @@ PAYMENT_URL_CONFIG = {
     'response_url': 'https://api.lavaott.com/payment/response/',
     'order_create_url': 'https://api.razorpay.com/v1/orders'
 }
-
-
 PAYMENT_CONFIG = {
-    "key_id": 'rzp_live_KNVLFuRdQHF0Lu',
-    "key_secret": 'jCmtb49N4bUK7qnuEsE31a2e'
+    "key_id": '79818249a83e188184b2d75955281897',
+    "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237'
 }
+
+# PAYMENT_CONFIG = {
+#     "key_id": 'rzp_live_KNVLFuRdQHF0Lu',
+#     "key_secret": 'jCmtb49N4bUK7qnuEsE31a2e'
+# }
