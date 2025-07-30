@@ -18,7 +18,7 @@ url_config = settings.PAYMENT_URL_CONFIG
 config = settings.PAYMENT_CONFIG
 
 # Add this flag to enable mock mode for testing
-USE_MOCK_API = False  # Set to False when you have the real CacheFree API
+USE_MOCK_API = True  # Set to False when you have the real CacheFree API
 
 def mock_cachefree_api(endpoint, method='GET', **kwargs):
     """Mock CacheFree API responses for testing"""
