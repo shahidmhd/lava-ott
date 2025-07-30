@@ -75,7 +75,7 @@ BY_PASS_VERIFY = False
 PAYMENT_URL_CONFIG = {
     'base_url': 'https://api.lavaott.com/',
     'response_url': 'https://api.lavaott.com/payment/response/',
-    'order_create_url': 'https://api.razorpay.com/v1/orders'
+    'order_create_url': 'https://api.cachefree.com/v1/orders'
 }
 PAYMENT_CONFIG = {
     "key_id": '79818249a83e188184b2d75955281897',
