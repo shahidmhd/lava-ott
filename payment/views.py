@@ -24,7 +24,7 @@ config = settings.PAYMENT_CONFIG
 USE_MOCK_API = False  # Toggle for mock/live
 
 def mock_cachefree_api(endpoint, method='GET', **kwargs):
-    """Mock CacheFree API responses for testing"""
+    """Mock Cashfree API responses for testing"""
     if method == 'POST' and 'orders' in endpoint:
         return {
             'status_code': 200,
@@ -72,22 +72,25 @@ def create_secure_session():
     return session
 
 
-def make_cachefree_request(url, method='GET', **kwargs):
-    """Make a secure request to CacheFree API with proper error handling"""
+def make_cashfree_request(url, method='GET', **kwargs):
+    """Make a secure request to Cashfree API with proper error handling"""
     session = create_secure_session()
     
-    # Add authentication
-    auth = HTTPBasicAuth(config['key_id'], config['key_secret'])
-    
-    # Set default headers
+    # Cashfree uses different authentication - x-client-id and x-client-secret headers
     headers = kwargs.get('headers', {})
     headers.update({
         'User-Agent': 'LavaOTT/1.0',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'x-client-id': config['key_id'],
+        'x-client-secret': config['key_secret'],
+        'x-api-version': '2023-08-01'  # Latest Cashfree API version
     })
     kwargs['headers'] = headers
-    kwargs['auth'] = auth
     kwargs['timeout'] = kwargs.get('timeout', 30)
+    
+    # Remove auth if it exists since Cashfree uses headers
+    if 'auth' in kwargs:
+        del kwargs['auth']
     
     try:
         # Option 1: Try with default SSL settings
@@ -144,9 +147,9 @@ class PaymentCheckoutBaseView(APIView):
                             i.status = res['status']
                             i.save()
                 else:
-                    # Use the new secure request function
-                    response = make_cachefree_request(
-                        f'https://api.cachefree.com/v1/orders/{i.cachefree_order_id}',
+                    # Use the new secure request function with correct Cashfree endpoint
+                    response = make_cashfree_request(
+                        f'https://api.cashfree.com/pg/orders/{i.razorpay_order_id}',
                         method='GET'
                     )
                     
@@ -178,14 +181,14 @@ class PaymentCheckoutBaseView(APIView):
             headers = {'Content-Type': 'application/json'}
 
             if USE_MOCK_API:
-                print("Using Mock CacheFree API")
+                print("Using Mock Cashfree API")
                 mock_response = mock_cachefree_api('orders', method='POST', json=payload, headers=headers)
                 response_status = mock_response['status_code']
                 res_dict = mock_response['json']
             else:
-                # Use the new secure request function
-                response = make_cachefree_request(
-                    'https://api.cachefree.com/v1/orders',
+                # Use the new secure request function with correct Cashfree endpoint
+                response = make_cashfree_request(
+                    'https://api.cashfree.com/pg/orders',
                     method='POST',
                     json=payload,
                     headers=headers
