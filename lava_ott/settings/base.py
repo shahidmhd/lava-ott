@@ -227,13 +227,29 @@ VERIFIED_NUMBERS = ['8075554765']
 VERIFIED_OTPS = ['123456']
 BY_PASS_VERIFY = True
 
+# PAYMENT_URL_CONFIG = {
+#     'base_url': 'http://127.0.0.1:8000/',
+#     'response_url': 'http://127.0.0.1:8000/payment/response/',
+#     'order_create_url': 'https://api.razorpay.com/v1/orders'
+# }
+
+# PAYMENT_CONFIG = {
+#     "key_id": 'rzp_test_8WbpTdlodzPfrX',
+#     "key_secret": 'ePOFb4Erm2znCYGJnkFDlgrO'
+# }
+
+# PAYMENT_URL_CONFIG = {
+#     'base_url': 'http://127.0.0.1:8000/',
+#     'response_url': 'http://127.0.0.1:8000/payment/response/',
+#     'order_create_url': 'http://127.0.0.1:8000/mock/api/v1/orders'  # Mock endpoint
+# }
 PAYMENT_URL_CONFIG = {
-    'base_url': 'http://127.0.0.1:8000/',
-    'response_url': 'http://127.0.0.1:8000/payment/response/',
-    'order_create_url': 'https://api.razorpay.com/v1/orders'
+    'base_url': 'https://api.lavaott.com/',
+    'response_url': 'https://api.lavaott.com/payment/response/',
+    'order_create_url': 'https://api.cachefree.com/v1/orders'
 }
 
 PAYMENT_CONFIG = {
-    "key_id": 'rzp_test_8WbpTdlodzPfrX',
-    "key_secret": 'ePOFb4Erm2znCYGJnkFDlgrO'
+    "key_id": '79818249a83e188184b2d75955281897',
+    "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237'
 }

@@ -12,11 +12,44 @@ from videos.models import Order
 from django.conf import settings
 from datetime import timedelta
 from django.utils import timezone
-
+import json
 
 url_config = settings.PAYMENT_URL_CONFIG
 config = settings.PAYMENT_CONFIG
 
+# Add this flag to enable mock mode for testing
+USE_MOCK_API = False  # Set to False when you have the real CacheFree API
+
+def mock_cachefree_api(endpoint, method='GET', **kwargs):
+    """Mock CacheFree API responses for testing"""
+    if method == 'POST' and 'orders' in endpoint:
+        # Mock order creation response
+        return {
+            'status_code': 200,
+            'json': {
+                'id': f'order_mock_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}',
+                'amount': kwargs.get('json', {}).get('amount', 10000),
+                'amount_due': kwargs.get('json', {}).get('amount', 10000),
+                'amount_paid': 0,
+                'attempts': 0,
+                'created_at': int(datetime.datetime.now().timestamp()),
+                'currency': 'INR',
+                'entity': 'order',
+                'offer_id': None,
+                'receipt': kwargs.get('json', {}).get('receipt', 'test_receipt'),
+                'status': 'created'
+            }
+        }
+    elif method == 'GET' and 'orders' in endpoint:
+        # Mock order status response
+        return {
+            'status_code': 200,
+            'json': {
+                'status': 'created'
+            }
+        }
+    
+    return {'status_code': 404, 'json': {'error': 'Not found'}}
 
 class PaymentCheckoutTestView(APIView):
     def get_key_config(self):
@@ -27,16 +60,30 @@ class PaymentCheckoutTestView(APIView):
         return b64decode(order_id).decode()[6:]
 
     def get(self, request, **kwargs):
-        from json import loads
         config = self.get_key_config()
         expiry = timezone.now() - timedelta(hours=12)
+        
+        # Handle existing transactions with better error handling
         for i in Transaction.objects.filter(status='created', timestamp__gte=expiry):
-            res = requests.get(f'https://api.razorpay.com/v1/orders/{i.razorpay_order_id}',
-                               auth=HTTPBasicAuth(config['key_id'], config['key_secret']))
-            res = loads(res.text)
-            if res['status'] != i.status:
-                i.status = res['status']
-                i.save()
+            try:
+                if USE_MOCK_API:
+                    mock_response = mock_cachefree_api(f'orders/{i.cachefree_order_id}', method='GET')
+                    if mock_response['status_code'] == 200:
+                        res = mock_response['json']
+                        if res['status'] != i.status:
+                            i.status = res['status']
+                            i.save()
+                else:
+                    res = requests.get(f'https://api.cachefree.com/v1/orders/{i.cachefree_order_id}',
+                                       auth=HTTPBasicAuth(config['key_id'], config['key_secret']),
+                                       timeout=10)
+                    res_data = res.json()
+                    if res_data['status'] != i.status:
+                        i.status = res_data['status']
+                        i.save()
+            except Exception as e:
+                print(f"Error checking transaction {i.id}: {e}")
+                continue
 
         try:
             order_id = kwargs.get('id')
@@ -47,46 +94,46 @@ class PaymentCheckoutTestView(APIView):
             except:
                 return JsonResponse({'message': 'Invalid Order'})
 
-            # from datetime import timedelta
-            # from django.utils import timezone
             exp_time = timezone.now() - timedelta(minutes=10)
             trans = Transaction.objects.filter(order=order_obj, timestamp__gte=exp_time)
-            # if trans.exists():
-            #     return render(request, 'error.html', {'err_msg': 'Payment already Initiated. Try after 10 minutes.'})
 
             trans = Transaction.objects.filter(order=order_obj, status='attempted')
-            # if trans.exists():
-            #     return render(request, 'error.html', {'err_msg': 'Payment under processing. Try again later.'})
 
             amount = int(order_obj.subscription_amount)
 
             payload = {
-                "amount": int(str(amount) + '00'), # Need to add two zeros at end, since it converts the last two digits to decimal
-                # "amount": int(amount), # Need to add two zeros at end, since it converts the last two digits to decimal
+                "amount": int(str(amount) + '00'),
                 "currency": "INR",
                 "receipt": Transaction.generate_receipt()
             }
+            
             headers = {'Content-Type': 'application/json'}
             config = self.get_key_config()
-            response = requests.post('https://api.razorpay.com/v1/orders',
-                                     json=payload, headers=headers,
-                                     auth=HTTPBasicAuth(config['key_id'], config['key_secret'])
-                                     )
+            
+            # Use mock API or real API based on flag
+            if USE_MOCK_API:
+                print("Using Mock CacheFree API for testing")
+                mock_response = mock_cachefree_api('orders', method='POST', json=payload, headers=headers)
+                response_status = mock_response['status_code']
+                res_dict = mock_response['json']
+                print(f"Mock API Response: {res_dict}")
+            else:
+                response = requests.post('https://api.cachefree.com/v1/orders',
+                                         json=payload, headers=headers,
+                                         auth=HTTPBasicAuth(config['key_id'], config['key_secret']),
+                                         timeout=30)
+                response_status = response.status_code
+                res_dict = response.json()
 
             print('------------- Checkout Response ------------')
-            print('status code : ', response.status_code)
-            from json import loads
-            print('response : ', response.text)
-
+            print('status code : ', response_status)
+            print('response : ', res_dict)
             print('------------- Checkout Response End ------------')
-            res_dict = loads(response.text)
 
             # Error Response
             if 'error' in res_dict:
-                msg = res_dict['error']['description'] if 'description' in res_dict['error'] else ''
+                msg = res_dict['error']['description'] if 'description' in res_dict['error'] else 'Payment gateway error'
                 return render(request, 'error.html', {'err_msg': msg})
-            # ------------
-            # return JsonResponse({'message': res_dict})
 
             order_id = res_dict.get('id')
 
@@ -105,20 +152,22 @@ class PaymentCheckoutTestView(APIView):
             transaction.status = res_dict.get('status')
             transaction.order = order_obj
             transaction.save()
+            
             config = self.get_key_config()
             res_dict = {
                 'key_id': config['key_id'],
-                # 'response_url': url_config['response_url'],
-                'response_url': 'http://127.0.0.1:8000/payment/response-test/',
-                'id': order_id
-                # 'name': request.customuser if request.customuser else '',
-                # 'contact': request.customuser.mobile_number if request.customuser else '',
+                'response_url': 'http://127.0.0.1:8000/payment/response/',
+                'id': order_id,
+                'amount': amount,
+                'currency': 'INR',
+                'name': 'Lava OTT',
+                'description': f'Subscription for Order #{order_obj.id}'
             }
             print(res_dict)
 
-        # return render(self.request, 'checkout1.html', context={'data': res_dict})
             return render(self.request, 'checkout.html', context={'data': res_dict})
         except Exception as e:
+            print(f"Checkout error: {e}")
             return JsonResponse({'message': str(e)})
 
 
@@ -131,135 +180,50 @@ class PaymentCheckoutView(PaymentCheckoutTestView):
         return b64decode(order_id).decode()[6:]
 
     def get(self, request, **kwargs):
-        from json import loads
-        config = self.get_key_config()
-        expiry = timezone.now() - timedelta(hours=12)
-        for i in Transaction.objects.filter(status='created', timestamp__gte=expiry):
-            res = requests.get(f'https://api.razorpay.com/v1/orders/{i.razorpay_order_id}',
-                               auth=HTTPBasicAuth(config['key_id'], config['key_secret']))
-
-            res = loads(res.text)
-            if 'error' in res:
-                continue
-
-            if res['status'] != i.status:
-                i.status = res['status']
-                i.save()
-
-        try:
-            order_id = kwargs.get('id')
-            order_id = self.get_order_id(order_id)
-
-            try:
-                order_obj = Order.objects.get(id=order_id)
-            except:
-                return JsonResponse({'message': 'Invalid Order'})
-
-            exp_time = timezone.now() - timedelta(minutes=10)
-            trans = Transaction.objects.filter(order=order_obj, status='created', timestamp__gte=exp_time)
-            if trans.exists():
-                return render(request, 'error.html', {'err_msg': 'Payment already Initiated. Try after 10 minutes.'})
-
-            trans = Transaction.objects.filter(order=order_obj, status='attempted')
-            if trans.exists():
-                return render(request, 'error.html', {'err_msg': 'Payment under processing. Try again later.'})
-
-            amount = int(order_obj.subscription_amount)
-
-            payload = {
-                "amount": int(str(amount) + '00'), # Need to add two zeros at end, since it converts the last two digits to decimal
-                # "amount": int(amount), # Need to add two zeros at end, since it converts the last two digits to decimal
-                "currency": "INR",
-                "receipt": Transaction.generate_receipt()
-            }
-            headers = {'Content-Type': 'application/json'}
-            config = self.get_key_config()
-            response = requests.post('https://api.razorpay.com/v1/orders',
-                                     json=payload, headers=headers,
-                                     auth=HTTPBasicAuth(config['key_id'], config['key_secret'])
-                                     )
-
-            print('------------- Checkout Response ------------')
-            print('status code : ', response.status_code)
-            from json import loads
-            print('response : ', response.text)
-
-            print('------------- Checkout Response End ------------')
-            res_dict = loads(response.text)
-
-            # Error Response
-            if 'error' in res_dict:
-                msg = res_dict['error']['description'] if 'description' in res_dict['error'] else ''
-                return render(request, 'error.html', {'err_msg': msg})
-            # ------------ #
-
-            # return JsonResponse({'message': res_dict})
-
-            # Save to Transaction Table
-            transaction = Transaction()
-            transaction.razorpay_order_id = res_dict.get('id')
-            transaction.amount = amount
-            transaction.amount_due = res_dict.get('amount_due')
-            transaction.amount_paid = res_dict.get('amount_paid')
-            transaction.attempts = res_dict.get('attempts')
-            transaction.created_at = res_dict.get('created_at')
-            transaction.currency = res_dict.get('currency')
-            transaction.entity = res_dict.get('entity')
-            transaction.offer_id = res_dict.get('offer_id')
-            transaction.receipt = res_dict.get('receipt')
-            transaction.status = res_dict.get('status')
-            transaction.order = order_obj
-            transaction.save()
-
-            res_dict.update({
-                'key_id': config['key_id'],
-                'response_url': url_config['response_url'],
-                # 'name': request.customuser if request.customuser else '',
-                # 'contact': request.customuser.mobile_number if request.customuser else '',
-            })
-
-            # return render(self.request, 'checkout1.html', context={'data': res_dict})
-            return render(self.request, 'checkout.html', context={'data': res_dict})
-        except Exception as e:
-            return JsonResponse({'message': str(e)})
+        # Same logic as test view but for production
+        # You can modify USE_MOCK_API to False when ready for production
+        return super().get(request, **kwargs)
 
 
 class PaymentResponseView(APIView):
     def post(self, request):
         response_data = request.POST.dict()
+        print(f"Payment response received: {response_data}")
 
         # Payment Failed
         if 'error[code]' in response_data:
-            from json import loads
-
-            error_description = response_data.get('error[description]')
-            error_source = response_data.get('error[source]')
-            error_step = response_data.get('error[step]')
-            error_reason = response_data.get('error[reason]')
-            error_metadata = loads(response_data.get('error[metadata]'))
-
-            razorpay_payment_id = error_metadata['payment_id']
-            razorpay_order_id = error_metadata['order_id']
-
+            error_description = response_data.get('error[description]', 'Payment failed')
+            error_metadata = response_data.get('error[metadata]', '{}')
+            
             try:
-                transaction = Transaction.objects.get(razorpay_order_id=razorpay_order_id)
-                transaction.status = 'failed'
-                transaction.payment_timestamp = datetime.datetime.now()
-                transaction.payment_id = razorpay_payment_id
-                transaction.save()
-
-                return render(request, 'error.html', {'err_msg': error_description})
+                error_metadata = json.loads(error_metadata)
+                razorpay_payment_id = error_metadata.get('payment_id')
+                razorpay_order_id = error_metadata.get('order_id')
             except:
-                return JsonResponse({'message': 'Invalid order ID'})
+                razorpay_payment_id = None
+                razorpay_order_id = None
+
+            if razorpay_order_id:
+                try:
+                    transaction = Transaction.objects.get(razorpay_order_id=razorpay_order_id)
+                    transaction.status = 'failed'
+                    transaction.payment_timestamp = datetime.datetime.now()
+                    transaction.payment_id = razorpay_payment_id
+                    transaction.save()
+                except Transaction.DoesNotExist:
+                    pass
+
+            return render(request, 'error.html', {'err_msg': error_description})
 
         # Payment Success
         else:
             from django.utils import timezone
             from videos.utils import get_expiry_date
 
-            razorpay_payment_id = response_data.get('razorpay_payment_id')
+            razorpay = response_data.get('razorpay_payment_id')
             razorpay_order_id = response_data.get('razorpay_order_id')
             razorpay_signature = response_data.get('razorpay_signature')
+            
             try:
                 transaction = Transaction.objects.get(razorpay_order_id=razorpay_order_id)
                 transaction.status = 'paid'
@@ -276,13 +240,11 @@ class PaymentResponseView(APIView):
                 order.save()
 
                 return render(request, 'success.html')
-            except:
+            except Transaction.DoesNotExist:
                 return JsonResponse({'message': 'Invalid order ID'})
-            # return Response({'message': response_data})
 
 
 class PaymentResponseTestView(APIView):
     def post(self, request):
         response_data = request.POST.dict()
         return JsonResponse({'response': response_data})
-

@@ -3,7 +3,7 @@ from .base import *
 DEBUG = True
 
 # ALLOWED_HOSTS = ['164.52.218.69']
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost','api.lavaott.com', '164.52.200.90']
 
 
 DATABASES = {
