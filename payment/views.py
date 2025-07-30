@@ -156,7 +156,7 @@ class PaymentCheckoutTestView(APIView):
             config = self.get_key_config()
             res_dict = {
                 'key_id': config['key_id'],
-                'response_url': 'http://127.0.0.1:8000/payment/response/',
+                'response_url': 'https://api.lavaott.com/payment/response/',
                 'id': order_id,
                 'amount': amount,
                 'currency': 'INR',
