@@ -17,7 +17,7 @@ from videos.utils import get_expiry_date
 url_config = settings.PAYMENT_URL_CONFIG
 config = settings.PAYMENT_CONFIG
 
-USE_MOCK_API = True  # Toggle for mock/live
+USE_MOCK_API = False  # Toggle for mock/live
 
 def mock_cachefree_api(endpoint, method='GET', **kwargs):
     """Mock CacheFree API responses for testing"""
