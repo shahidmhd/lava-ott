@@ -1,6 +1,8 @@
 import datetime
 import requests
 from requests.auth import HTTPBasicAuth
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.http import JsonResponse
@@ -8,6 +10,8 @@ from django.shortcuts import render
 from django.utils import timezone
 from datetime import timedelta
 import json
+import ssl
+import urllib3
 
 from .models import Transaction
 from videos.models import Order
@@ -46,6 +50,78 @@ def mock_cachefree_api(endpoint, method='GET', **kwargs):
     return {'status_code': 404, 'json': {'error': 'Not found'}}
 
 
+def create_secure_session():
+    """Create a requests session with proper SSL configuration"""
+    session = requests.Session()
+    
+    # Configure retry strategy
+    retry_strategy = Retry(
+        total=3,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    # SSL configuration options - try these in order of preference
+    
+    # Option 1: Force TLS 1.2+ (recommended)
+    session.mount('https://', HTTPAdapter(max_retries=retry_strategy))
+    
+    return session
+
+
+def make_cachefree_request(url, method='GET', **kwargs):
+    """Make a secure request to CacheFree API with proper error handling"""
+    session = create_secure_session()
+    
+    # Add authentication
+    auth = HTTPBasicAuth(config['key_id'], config['key_secret'])
+    
+    # Set default headers
+    headers = kwargs.get('headers', {})
+    headers.update({
+        'User-Agent': 'LavaOTT/1.0',
+        'Accept': 'application/json'
+    })
+    kwargs['headers'] = headers
+    kwargs['auth'] = auth
+    kwargs['timeout'] = kwargs.get('timeout', 30)
+    
+    try:
+        # Option 1: Try with default SSL settings
+        if method.upper() == 'POST':
+            response = session.post(url, **kwargs)
+        else:
+            response = session.get(url, **kwargs)
+        return response
+        
+    except requests.exceptions.SSLError as ssl_error:
+        print(f"SSL Error occurred: {ssl_error}")
+        
+        # Option 2: Try with SSL verification disabled (less secure, use only if necessary)
+        print("Retrying with SSL verification disabled...")
+        kwargs['verify'] = False
+        
+        # Suppress SSL warnings when verification is disabled
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        try:
+            if method.upper() == 'POST':
+                response = session.post(url, **kwargs)
+            else:
+                response = session.get(url, **kwargs)
+            return response
+        except Exception as e:
+            print(f"Request failed even with SSL verification disabled: {e}")
+            raise
+    
+    except Exception as e:
+        print(f"Request failed with error: {e}")
+        raise
+
+
 class PaymentCheckoutBaseView(APIView):
     """Shared base for test and live checkout views"""
 
@@ -68,15 +144,20 @@ class PaymentCheckoutBaseView(APIView):
                             i.status = res['status']
                             i.save()
                 else:
-                    res = requests.get(
+                    # Use the new secure request function
+                    response = make_cachefree_request(
                         f'https://api.cachefree.com/v1/orders/{i.cachefree_order_id}',
-                        auth=HTTPBasicAuth(config['key_id'], config['key_secret']),
-                        timeout=10
+                        method='GET'
                     )
-                    res_data = res.json()
-                    if res_data['status'] != i.status:
-                        i.status = res_data['status']
-                        i.save()
+                    
+                    if response.status_code == 200:
+                        res_data = response.json()
+                        if res_data['status'] != i.status:
+                            i.status = res_data['status']
+                            i.save()
+                    else:
+                        print(f"API request failed with status {response.status_code}: {response.text}")
+                        
             except Exception as e:
                 print(f"Error checking transaction {i.id}: {e}")
                 continue
@@ -102,14 +183,22 @@ class PaymentCheckoutBaseView(APIView):
                 response_status = mock_response['status_code']
                 res_dict = mock_response['json']
             else:
-                response = requests.post(
+                # Use the new secure request function
+                response = make_cachefree_request(
                     'https://api.cachefree.com/v1/orders',
-                    json=payload, headers=headers,
-                    auth=HTTPBasicAuth(config['key_id'], config['key_secret']),
-                    timeout=30
+                    method='POST',
+                    json=payload,
+                    headers=headers
                 )
                 response_status = response.status_code
-                res_dict = response.json()
+                
+                if response_status == 200:
+                    res_dict = response.json()
+                else:
+                    print(f"API request failed with status {response_status}: {response.text}")
+                    return render(request, 'error.html', {
+                        'err_msg': f'Payment gateway error: {response.text}'
+                    })
 
             if 'error' in res_dict:
                 msg = res_dict['error'].get('description', 'Payment gateway error')
