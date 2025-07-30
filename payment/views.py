@@ -84,7 +84,7 @@ def make_cashfree_request(url, method='GET', **kwargs):
         'Content-Type': 'application/json',
         'x-client-id': config['key_id'],
         'x-client-secret': config['key_secret'],
-        'x-api-version': '2023-08-01'  # Cashfree requires API version
+        'x-api-version': '2022-09-01'  # Cashfree requires API version
     })
     kwargs['headers'] = headers
     kwargs['timeout'] = kwargs.get('timeout', 30)

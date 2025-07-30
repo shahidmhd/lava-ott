@@ -265,6 +265,6 @@ PAYMENT_URL_CONFIG = {
 PAYMENT_CONFIG = {
     "key_id": '79818249a83e188184b2d75955281897',
     "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',
-    "test_mode": True,  # Try sandbox first
+    "test_mode": False,  # Try sandbox first
     "api_version": "2022-09-01"  # Try this version instead
 }
