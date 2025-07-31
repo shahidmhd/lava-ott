@@ -1,10 +1,12 @@
+# settings/production.py
 from .base import *
 
-DEBUG = True
+# PRODUCTION OVERRIDES
+DEBUG = False  # Override base.py DEBUG = True
 
-# ALLOWED_HOSTS = ['lavaott.com', '164.52.200.90', 'www.lavaott.com']
-ALLOWED_HOSTS = ['api.lavaott.com', '164.52.200.90','127.0.0.1']
+ALLOWED_HOSTS = ['api.lavaott.com', '164.52.200.90', 'lavaott.com', 'www.lavaott.com','127.0.0.1']
 
+# Production Database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
@@ -16,18 +18,12 @@ DATABASES = {
     }
 }
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-#         'NAME': 'mylava',
-#         'USER': 'mylavauser',
-#         'PASSWORD': 'mylava@2024',
-#         'HOST': 'localhost',
-#         'PORT': '',
-#     }
-# }
-
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS Configuration for Production
+CORS_ALLOWED_ORIGINS = [
+    "https://api.lavaott.com",
+    "https://lavaott.com",
+    "https://www.lavaott.com",
+]
 
 CORS_ALLOW_HEADERS = [
     'access-control-allow-headers',
@@ -38,8 +34,17 @@ CORS_ALLOW_HEADERS = [
     'xauth',
 ]
 
-OTP_SEND = True
+# Production Security Settings
+SECURE_SSL_REDIRECT = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
 
+# Session Security
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# Static Files for Production
 STATIC_URL = '/lava-static/'
 STATIC_ROOT = '/var/backend-static/'
 STATIC_FILES_DIRS = [os.path.join(BASE_DIR, 'static')]
@@ -47,66 +52,31 @@ STATIC_FILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 MEDIA_ROOT = '/var/backend-static/media/'
 MEDIA_URL = '/lava-media/'
 
-
-# LOGGING = {
-#     'version': 1,
-#     'disable_existing_loggers': False,
-#     'handlers': {
-#         'nginx_error_log': {
-#             'level': 'DEBUG',
-#             'class': 'logging.handlers.WatchedFileHandler',
-#             'filename': '/var/log/nginx/error.log',
-#         },
-#     },
-#     'loggers': {
-#         'django': {
-#             'handlers': ['nginx_error_log'],
-#             'level': 'DEBUG',
-#             'propagate': True,
-#         },
-#     },
-# }
-
+# Override OTP bypass for production
 BY_PASS_VERIFY = False
 
-# SECURE_SSL_REDIRECT = True
-
-
-# PAYMENT_URL_CONFIG = {
-#     'base_url': 'https://api.lavaott.com/',
-#     'response_url': 'https://api.lavaott.com/payment/response/',
-#     'order_create_url': 'https://api.cachefree.com/v1/orders'
-# }
-# PAYMENT_CONFIG = {
-#     "key_id": '79818249a83e188184b2d75955281897',
-#     "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237'
-# }
-# Production settings
-# PAYMENT_URL_CONFIG = {
-#     'base_url': 'https://api.lavaott.com/',
-#     'response_url': 'https://api.lavaott.com/payment/response/',
-#     'sandbox_api_url': 'https://sandbox.cashfree.com/pg/orders',
-#     'production_api_url': 'https://api.cashfree.com/pg/orders'
-# }
-
-# PAYMENT_CONFIG = {
-#     "key_id": '79818249a83e188184b2d75955281897',
-#     "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',
-#     "test_mode": False,  # Production mode
-#     "api_version": "2022-09-01"
-# }
-# PAYMENT_CONFIG = {
-#     "key_id": 'rzp_live_KNVLFuRdQHF0Lu',
-#     "key_secret": 'jCmtb49N4bUK7qnuEsE31a2e'
-# }
-
-PAYMENT_CONFIG = {
-    'key_id': '79818249a83e188184b2d75955281897',
-    'key_secret': 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',
-    # Remove test_mode - it will be auto-detected from credentials
+# Payment URLs for Production (override base.py URLs)
+PAYMENT_URL_CONFIG = {
+    'base_url': 'https://api.lavaott.com/',
+    'response_url': 'https://api.lavaott.com/payment/response/',
+    'webhook_url': 'https://api.lavaott.com/payment/webhook/',
+    'sandbox_api_url': 'https://sandbox.cashfree.com/pg/orders',
+    'production_api_url': 'https://api.cashfree.com/pg/orders'
 }
 
-PAYMENT_URL_CONFIG = {
-    'response_url': 'https://api.lavaott.com/payment/response/',  # Use HTTPS for production
-    'webhook_url': 'https://api.lavaott.com/payment/webhook/',   # Optional but recommended
+# Payment config is already perfect in base.py, no need to override
+
+# Simple console logging for now (no file logging issues)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
 }
