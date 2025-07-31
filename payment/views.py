@@ -352,7 +352,7 @@ class PaymentResponseView(APIView):
             if order_id:
                 try:
                     transaction = Transaction.objects.get(razorpay_order_id=order_id)
-                    transaction.status = 'FAILED'
+                    transaction.status = 'failed'
                     transaction.payment_timestamp = timezone.now()
                     transaction.payment_id = response_data.get('cf_payment_id', '')
                     transaction.save()
@@ -389,7 +389,7 @@ class PaymentResponseView(APIView):
             
             # Process successful payment
             if api_status == 'PAID' or (not success and response_data.get('order_status') == 'PAID'):
-                transaction.status = 'PAID'
+                transaction.status = 'paid'
                 transaction.payment_timestamp = timezone.now()
                 transaction.payment_id = response_data.get('cf_payment_id', payment_verification.get('cf_payment_id', ''))
                 transaction.amount_paid = float(response_data.get('order_amount', transaction.amount))
@@ -413,7 +413,7 @@ class PaymentResponseView(APIView):
                 })
             else:
                 # Payment not successful
-                transaction.status = api_status
+                transaction.status = 'failed'
                 transaction.payment_timestamp = timezone.now()
                 transaction.payment_id = response_data.get('cf_payment_id', '')
                 transaction.save()
