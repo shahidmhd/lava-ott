@@ -255,6 +255,7 @@ BY_PASS_VERIFY = True
 # }
 
 # Production settings
+
 PAYMENT_URL_CONFIG = {
     'base_url': 'https://api.lavaott.com/',
     'response_url': 'https://api.lavaott.com/payment/response/',
