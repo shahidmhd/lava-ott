@@ -388,13 +388,13 @@ class PaymentResponseView(APIView):
                 print(f"⚠️ API verification failed, using response status: {api_status}")
             
             # Process successful payment
-            if api_status == 'PAID' or (not success and response_data.get('order_status') == 'PAID'):
-                transaction.status = 'PAID'
+            if api_status == 'paid' or (not success and response_data.get('order_status') == 'paid'):
+                transaction.status = 'paid'
                 transaction.payment_timestamp = timezone.now()
                 transaction.payment_id = response_data.get('cf_payment_id', payment_verification.get('cf_payment_id', ''))
                 transaction.amount_paid = float(response_data.get('order_amount', transaction.amount))
                 transaction.save()
-                print(f"✅ Transaction {transaction.id} marked as PAID")
+                print(f"✅ Transaction {transaction.id} marked as paid")
 
                 # Activate subscription
                 order = transaction.order
