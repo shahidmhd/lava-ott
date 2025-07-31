@@ -82,20 +82,31 @@ BY_PASS_VERIFY = False
 #     "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237'
 # }
 # Production settings
-PAYMENT_URL_CONFIG = {
-    'base_url': 'https://api.lavaott.com/',
-    'response_url': 'https://api.lavaott.com/payment/response/',
-    'sandbox_api_url': 'https://sandbox.cashfree.com/pg/orders',
-    'production_api_url': 'https://api.cashfree.com/pg/orders'
-}
+# PAYMENT_URL_CONFIG = {
+#     'base_url': 'https://api.lavaott.com/',
+#     'response_url': 'https://api.lavaott.com/payment/response/',
+#     'sandbox_api_url': 'https://sandbox.cashfree.com/pg/orders',
+#     'production_api_url': 'https://api.cashfree.com/pg/orders'
+# }
 
-PAYMENT_CONFIG = {
-    "key_id": '79818249a83e188184b2d75955281897',
-    "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',
-    "test_mode": False,  # Production mode
-    "api_version": "2022-09-01"
-}
+# PAYMENT_CONFIG = {
+#     "key_id": '79818249a83e188184b2d75955281897',
+#     "key_secret": 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',
+#     "test_mode": False,  # Production mode
+#     "api_version": "2022-09-01"
+# }
 # PAYMENT_CONFIG = {
 #     "key_id": 'rzp_live_KNVLFuRdQHF0Lu',
 #     "key_secret": 'jCmtb49N4bUK7qnuEsE31a2e'
 # }
+
+PAYMENT_CONFIG = {
+    'key_id': '79818249a83e188184b2d75955281897',
+    'key_secret': 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',
+    # Remove test_mode - it will be auto-detected from credentials
+}
+
+PAYMENT_URL_CONFIG = {
+    'response_url': 'https://api.lavaott.com/payment/response/',  # Use HTTPS for production
+    'webhook_url': 'https://api.lavaott.com/payment/webhook/',   # Optional but recommended
+}

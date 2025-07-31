@@ -1,6 +1,5 @@
 import datetime
 import requests
-from requests.auth import HTTPBasicAuth
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from rest_framework.views import APIView
@@ -10,7 +9,6 @@ from django.shortcuts import render
 from django.utils import timezone
 from datetime import timedelta
 import json
-import ssl
 import urllib3
 
 from .models import Transaction
@@ -21,16 +19,39 @@ from videos.utils import get_expiry_date
 url_config = settings.PAYMENT_URL_CONFIG
 config = settings.PAYMENT_CONFIG
 
-USE_MOCK_API = False  # Toggle for mock/live
+USE_MOCK_API = False
+
+def detect_credentials_type():
+    """Automatically detect if credentials are production or sandbox"""
+    key_secret = config.get('key_secret', '')
+    if key_secret.startswith('cfsk_ma_prod_'):
+        return 'production'
+    elif key_secret.startswith('cfsk_ma_test_'):
+        return 'sandbox'
+    else:
+        # Fallback to test_mode setting
+        return 'sandbox' if config.get('test_mode', True) else 'production'
+
+def get_correct_api_endpoint():
+    """Get the correct API endpoint based on credential type"""
+    credentials_type = detect_credentials_type()
+    
+    if credentials_type == 'production':
+        api_url = 'https://api.cashfree.com/pg/orders'
+        print(f"🟢 Using PRODUCTION API: {api_url} (detected production credentials)")
+    else:
+        api_url = 'https://sandbox.cashfree.com/pg/orders'
+        print(f"🟡 Using SANDBOX API: {api_url} (detected sandbox credentials)")
+    
+    return api_url, credentials_type
 
 def mock_cashfree_api(endpoint, method='GET', **kwargs):
     """Mock Cashfree API responses for testing"""
     if method == 'POST' and 'orders' in endpoint:
         payload = kwargs.get('json', {})
-        # Use the order_id from the payload (this comes from Transaction.generate_receipt())
         mock_order_id = payload.get('order_id', f'order_prod_{datetime.datetime.now().strftime("%Y%m%d%H%M%S")}')
         return {
-            'status_code': 201,  # Cashfree returns 201 for successful order creation
+            'status_code': 201,
             'json': {
                 'cf_order_id': 12345,
                 'created_at': datetime.datetime.now().isoformat(),
@@ -39,8 +60,8 @@ def mock_cashfree_api(endpoint, method='GET', **kwargs):
                 'order_amount': payload.get('order_amount', 100.0),
                 'order_currency': payload.get('order_currency', 'INR'),
                 'order_expiry_time': (datetime.datetime.now() + timedelta(minutes=15)).isoformat(),
-                'order_id': mock_order_id,  # Use the same order_id from the request
-                'order_meta': {'return_url': 'https://api.lavaott.com/payment/response/'},
+                'order_id': mock_order_id,
+                'order_meta': {'return_url': url_config['response_url']},
                 'order_note': payload.get('order_note', ''),
                 'order_status': 'ACTIVE',
                 'order_tags': None,
@@ -54,12 +75,10 @@ def mock_cashfree_api(endpoint, method='GET', **kwargs):
         }
     return {'status_code': 404, 'json': {'error': 'Not found'}}
 
-
 def create_secure_session():
     """Create a requests session with proper SSL configuration"""
     session = requests.Session()
     
-    # Configure retry strategy
     retry_strategy = Retry(
         total=3,
         backoff_factor=1,
@@ -71,57 +90,64 @@ def create_secure_session():
     
     return session
 
-
 def make_cashfree_request(url, method='GET', **kwargs):
     """Make a secure request to Cashfree API with proper error handling"""
     session = create_secure_session()
     
-    # Cashfree authentication headers
     headers = kwargs.get('headers', {})
     headers.update({
-        'User-Agent': 'LavaOTT/1.0',
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'x-client-id': config['key_id'],
         'x-client-secret': config['key_secret'],
-        'x-api-version': '2022-09-01'  # Try older API version
+        'x-api-version': '2023-08-01'
     })
     kwargs['headers'] = headers
     kwargs['timeout'] = kwargs.get('timeout', 30)
-    
-    # Remove auth if it exists since Cashfree uses headers
-    if 'auth' in kwargs:
-        del kwargs['auth']
+    kwargs['verify'] = True
     
     try:
+        print(f"Making {method} request to: {url}")
+        print(f"Using credentials: x-client-id={config['key_id']}")
+        print(f"Credential type: {detect_credentials_type().upper()}")
+        
         if method.upper() == 'POST':
             response = session.post(url, **kwargs)
         else:
             response = session.get(url, **kwargs)
+            
+        print(f"Response status: {response.status_code}")
+        
+        if response.status_code not in [200, 201]:
+            print(f"❌ API Error: {response.text}")
+        
         return response
         
-    except requests.exceptions.SSLError as ssl_error:
-        print(f"SSL Error occurred: {ssl_error}")
-        
-        # Retry with SSL verification disabled (less secure)
-        print("Retrying with SSL verification disabled...")
-        kwargs['verify'] = False
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        
-        try:
-            if method.upper() == 'POST':
-                response = session.post(url, **kwargs)
-            else:
-                response = session.get(url, **kwargs)
-            return response
-        except Exception as e:
-            print(f"Request failed even with SSL verification disabled: {e}")
-            raise
-    
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         print(f"Request failed with error: {e}")
         raise
 
+def verify_payment_with_cashfree(order_id):
+    """Verify payment status with Cashfree API"""
+    if USE_MOCK_API:
+        mock_response = mock_cashfree_api(f'orders/{order_id}', method='GET')
+        return mock_response['status_code'] == 200, mock_response['json']
+    
+    try:
+        api_endpoint, _ = get_correct_api_endpoint()
+        verify_url = f"{api_endpoint}/{order_id}"
+        
+        response = make_cashfree_request(verify_url, method='GET')
+        
+        if response.status_code == 200:
+            return True, response.json()
+        else:
+            print(f"Payment verification failed: {response.status_code} - {response.text}")
+            return False, {}
+            
+    except Exception as e:
+        print(f"Error verifying payment: {e}")
+        return False, {}
 
 class PaymentCheckoutBaseView(APIView):
     """Shared base for test and live checkout views"""
@@ -134,21 +160,21 @@ class PaymentCheckoutBaseView(APIView):
         return b64decode(order_id).decode()[6:]
 
     def handle_checkout(self, request, order_id):
-        # Update existing transactions status (using razorpay_order_id field for Cashfree order IDs)
+        print("\n" + "="*50)
+        print("🚀 STARTING CHECKOUT PROCESS")
+        print("="*50)
+        
+        # Get correct API endpoint based on credentials
+        api_endpoint, credentials_type = get_correct_api_endpoint()
+        
+        # Update existing transactions status
         expiry = timezone.now() - timedelta(hours=12)
         for transaction in Transaction.objects.filter(status__in=['created', 'ACTIVE'], timestamp__gte=expiry):
             try:
-                if USE_MOCK_API:
-                    mock_response = mock_cashfree_api(f'orders/{transaction.razorpay_order_id}', method='GET')
-                    if mock_response['status_code'] == 200:
-                        res = mock_response['json']
-                        if res.get('order_status') != transaction.status:
-                            transaction.status = res.get('order_status')
-                            transaction.save()
-                else:
-                    # Skip API calls for now due to authentication issues
-                    print(f"Skipping API call for transaction {transaction.id} due to auth issues")
-                    continue
+                success, payment_data = verify_payment_with_cashfree(transaction.razorpay_order_id)
+                if success and payment_data.get('order_status') != transaction.status:
+                    transaction.status = payment_data.get('order_status', transaction.status)
+                    transaction.save()
                         
             except Exception as e:
                 print(f"Error checking transaction {transaction.id}: {e}")
@@ -158,42 +184,57 @@ class PaymentCheckoutBaseView(APIView):
             order_id = self.get_order_id(order_id)
             try:
                 order_obj = Order.objects.get(id=order_id)
+                print(f"📋 Order found: #{order_obj.id}, Amount: ₹{order_obj.subscription_amount}")
             except Order.DoesNotExist:
+                print("❌ Order not found")
                 return JsonResponse({'message': 'Invalid Order'})
 
             amount = float(order_obj.subscription_amount)
             unique_order_id = Transaction.generate_receipt()
+            print(f"🎫 Generated order ID: {unique_order_id}")
+            
+            # Customer details handling
+            customer_phone = "9999999999"
+            customer_name = "Guest User"
+            customer_email = "guest@lavaott.com" 
+            customer_id = "guest_user"
+            
+            if request.user.is_authenticated:
+                customer_id = str(request.user.id)
+                customer_email = request.user.email or customer_email
+                customer_name = getattr(request.user, 'first_name', 'Guest User') or "Guest User"
+                
+                if hasattr(request.user, 'mobile_number') and request.user.mobile_number:
+                    customer_phone = str(request.user.mobile_number)
+            
+            print(f"👤 Customer: {customer_name} ({customer_email}) - {customer_phone}")
             
             payload = {
                 "order_amount": amount,
                 "order_currency": "INR",
                 "order_id": unique_order_id,
                 "customer_details": {
-                    "customer_id": str(request.user.id) if request.user.is_authenticated else "guest",
-                    "customer_email": request.user.email if request.user.is_authenticated else "guest@lavaott.com",
-                    "customer_phone": getattr(request.user, 'mobile_number', '9999999999') if request.user.is_authenticated else "9999999999"
+                    "customer_id": customer_id,
+                    "customer_email": customer_email,
+                    "customer_phone": customer_phone,
+                    "customer_name": customer_name
                 },
-                "order_note": f"Subscription for Order #{order_obj.id}",
+                "order_note": f"LavaOTT Subscription - Order #{order_obj.id}",
                 "order_meta": {
-                    "return_url": url_config['response_url']
+                    "return_url": url_config['response_url'],
+                    "notify_url": url_config.get('webhook_url', url_config['response_url'])
                 }
             }
-
-            # Use correct Cashfree sandbox/production endpoint
-            api_endpoint = 'https://sandbox.cashfree.com/pg/orders' if config.get('test_mode', True) else 'https://api.cashfree.com/pg/orders'
             
             if USE_MOCK_API:
-                print("Using Mock Cashfree API")
+                print("🧪 Using Mock Cashfree API")
                 mock_response = mock_cashfree_api('orders', method='POST', json=payload)
                 response_status = mock_response['status_code']
                 res_dict = mock_response['json']
                 print(f"Mock API Response: {res_dict}")
             else:
-                print(f"Making real Cashfree API call to: {api_endpoint}")
-                print(f"Payload: {payload}")
-                print(f"Headers will include:")
-                print(f"  x-client-id: {config['key_id']}")
-                print(f"  x-client-secret: {config['key_secret'][:10]}...")
+                print(f"🌐 Making Cashfree API call to: {api_endpoint}")
+                print(f"📦 Payload: {json.dumps(payload, indent=2)}")
                 
                 response = make_cashfree_request(
                     api_endpoint,
@@ -201,18 +242,19 @@ class PaymentCheckoutBaseView(APIView):
                     json=payload
                 )
                 response_status = response.status_code
-                print(f"Cashfree API response status: {response_status}")
+                print(f"📡 API Response Status: {response_status}")
                 
-                if response_status == 201:
+                if response_status in [200, 201]:
                     res_dict = response.json()
-                    print(f"Success! Response: {res_dict}")
+                    print(f"✅ SUCCESS! Order created: {res_dict.get('order_id')}")
+                    print(f"🔑 Payment Session ID: {res_dict.get('payment_session_id')}")
                 else:
-                    print(f"Cashfree API request failed with status {response_status}")
-                    print(f"Response text: {response.text}")
+                    print(f"❌ API request failed with status {response_status}")
+                    print(f"Response: {response.text}")
                     try:
                         error_data = response.json()
-                        error_msg = error_data.get('message', 'Payment gateway error')
-                        print(f"Error data: {error_data}")
+                        error_msg = error_data.get('message', f'Payment gateway error (HTTP {response_status})')
+                        print(f"Error details: {error_data}")
                     except:
                         error_msg = f'Payment gateway error (HTTP {response_status})'
                     
@@ -220,14 +262,13 @@ class PaymentCheckoutBaseView(APIView):
                         'err_msg': error_msg
                     })
 
-            # Check for Cashfree API errors in response
-            if response_status != 201:
+            if response_status not in [200, 201]:
                 msg = res_dict.get('message', 'Payment gateway error')
                 return render(request, 'error.html', {'err_msg': msg})
 
-            # Create transaction record - Store Cashfree order ID in razorpay_order_id field
+            # Create transaction record
             transaction = Transaction.objects.create(
-                razorpay_order_id=res_dict.get('order_id'),  # Store Cashfree order ID in existing field
+                razorpay_order_id=res_dict.get('order_id'),
                 amount=amount,
                 amount_due=res_dict.get('order_amount', amount),
                 amount_paid=0,
@@ -239,108 +280,123 @@ class PaymentCheckoutBaseView(APIView):
                 receipt=unique_order_id,
                 status=res_dict.get('order_status', 'ACTIVE'),
                 order=order_obj,
-                note_1=f"Subscription for Order #{order_obj.id}",
-                note_2="Cashfree Payment"  # Indicator that this is a Cashfree transaction
+                note_1=f"LavaOTT Subscription - Order #{order_obj.id}",
+                note_2=f"Cashfree Payment - {credentials_type.upper()}"
             )
             
-            print(f"Created transaction:")
-            print(f"  Transaction ID: {transaction.id}")
-            print(f"  Cashfree Order ID: {transaction.razorpay_order_id}")
-            print(f"  Amount: {transaction.amount}")
-            print(f"  Status: {transaction.status}")
+            print(f"💾 Transaction created: ID={transaction.id}")
 
-            # Prepare data for checkout template
+            # Checkout data
             checkout_data = {
                 'key_id': config['key_id'],
-                'environment': 'sandbox' if config.get('test_mode', True) else 'production',
-                'order_id': transaction.razorpay_order_id,  # This now contains Cashfree order ID
+                'environment': 'production' if credentials_type == 'production' else 'sandbox',
+                'order_id': transaction.razorpay_order_id,
                 'payment_session_id': res_dict.get('payment_session_id'),
                 'order_amount': amount,
                 'order_currency': 'INR',
                 'order_note': payload['order_note'],
                 'customer_details': payload['customer_details'],
-                'return_url': url_config['response_url']
+                'return_url': url_config['response_url'],
+                'cf_order_id': res_dict.get('cf_order_id'),
+                'order_token': res_dict.get('order_token'),
             }
 
+            print(f"🎨 Rendering checkout page...")
+            print("="*50 + "\n")
             return render(request, 'checkout.html', context={'data': checkout_data})
             
         except Exception as e:
-            print(f"Checkout error: {e}")
+            print(f"💥 Checkout error: {e}")
+            import traceback
+            traceback.print_exc()
             return JsonResponse({'message': str(e)})
 
-
 class PaymentCheckoutTestView(PaymentCheckoutBaseView):
-    """Test view using mock API"""
+    """Test view"""
     def get(self, request, id):
         return self.handle_checkout(request, id)
-
 
 class PaymentCheckoutView(PaymentCheckoutBaseView):
     """Live view"""
     def get(self, request, id):
         return self.handle_checkout(request, id)
 
-
 class PaymentResponseView(APIView):
     def post(self, request):
         response_data = request.POST.dict()
-        print(f"Cashfree payment response received: {response_data}")
+        print(f"\n🔔 Cashfree payment response received (POST): {response_data}")
+        return self._process_response(request, response_data)
+    
+    def get(self, request):
+        response_data = request.GET.dict()
+        print(f"\n🔔 Cashfree payment response received (GET): {response_data}")
+        return self._process_response(request, response_data)
+    
+    def _process_response(self, request, response_data):
+        """Process payment response from Cashfree"""
         
-        # Debug: Print all POST data
+        print("\n" + "="*50)
+        print("💳 PROCESSING PAYMENT RESPONSE")
+        print("="*50)
+        
         for key, value in response_data.items():
             print(f"  {key}: {value}")
 
-        # Handle Cashfree error responses
+        # Handle error responses
         if 'error' in response_data or response_data.get('order_status') == 'FAILED':
             error_description = response_data.get('error_description', 'Payment failed')
             order_id = response_data.get('order_id')
             
-            try:
-                if order_id:
-                    # Using razorpay_order_id field to store Cashfree order ID
+            print(f"❌ Payment failed for order {order_id}: {error_description}")
+            
+            if order_id:
+                try:
                     transaction = Transaction.objects.get(razorpay_order_id=order_id)
                     transaction.status = 'FAILED'
                     transaction.payment_timestamp = timezone.now()
                     transaction.payment_id = response_data.get('cf_payment_id', '')
                     transaction.save()
                     print(f"Updated transaction {transaction.id} status to FAILED")
-            except Transaction.DoesNotExist:
-                print(f"Transaction not found for order_id: {order_id}")
-                pass
+                except Transaction.DoesNotExist:
+                    print(f"Transaction not found for failed order_id: {order_id}")
             
             return render(request, 'error.html', {'err_msg': error_description})
 
         try:
             order_id = response_data.get('order_id')
-            print(f"Looking for transaction with order_id: {order_id}")
+            print(f"🔍 Processing order_id: {order_id}")
             
             if not order_id:
-                print("No order_id found in response data")
+                print("❌ No order_id found in response")
                 return JsonResponse({'message': 'No order ID provided'})
             
-            # Using razorpay_order_id field to store Cashfree order ID
             try:
                 transaction = Transaction.objects.get(razorpay_order_id=order_id)
-                print(f"Found transaction: {transaction.id} with status: {transaction.status}")
+                print(f"📋 Found transaction: {transaction.id} (status: {transaction.status})")
             except Transaction.DoesNotExist:
-                print(f"Transaction not found for order_id: {order_id}")
-                # List all transactions for debug
-                all_transactions = Transaction.objects.all().order_by('-id')[:5]
-                print("Recent transactions:")
-                for t in all_transactions:
-                    print(f"  ID: {t.id}, Order ID: {t.razorpay_order_id}, Status: {t.status}")
+                print(f"❌ Transaction not found for order_id: {order_id}")
                 return JsonResponse({'message': f'Invalid order ID: {order_id}'})
             
-            # Update transaction for successful payment
-            if response_data.get('order_status') == 'PAID':
+            # Verify payment with Cashfree API
+            success, payment_verification = verify_payment_with_cashfree(order_id)
+            
+            if success:
+                api_status = payment_verification.get('order_status', 'UNKNOWN')
+                print(f"✅ API verification successful: {api_status}")
+            else:
+                api_status = response_data.get('order_status', 'UNKNOWN')
+                print(f"⚠️ API verification failed, using response status: {api_status}")
+            
+            # Process successful payment
+            if api_status == 'PAID' or (not success and response_data.get('order_status') == 'PAID'):
                 transaction.status = 'PAID'
                 transaction.payment_timestamp = timezone.now()
-                transaction.payment_id = response_data.get('cf_payment_id', '')
+                transaction.payment_id = response_data.get('cf_payment_id', payment_verification.get('cf_payment_id', ''))
                 transaction.amount_paid = float(response_data.get('order_amount', transaction.amount))
                 transaction.save()
-                print(f"Updated transaction {transaction.id} status to PAID")
+                print(f"✅ Transaction {transaction.id} marked as PAID")
 
-                # Update order
+                # Activate subscription
                 order = transaction.order
                 new_start_date = timezone.now()
                 order.status = 'completed'
@@ -348,26 +404,34 @@ class PaymentResponseView(APIView):
                 order.start_date = new_start_date
                 order.expiration_date = get_expiry_date(new_start_date, period=order.subscription_period)
                 order.save()
-                print(f"Updated order {order.id} status to completed")
+                print(f"🎉 Subscription activated for order {order.id}")
 
-                return render(request, 'success.html')
+                return render(request, 'success.html', {
+                    'order_id': order_id,
+                    'amount': transaction.amount,
+                    'payment_id': transaction.payment_id
+                })
             else:
                 # Payment not successful
-                transaction.status = response_data.get('order_status', 'FAILED')
+                transaction.status = api_status
                 transaction.payment_timestamp = timezone.now()
                 transaction.payment_id = response_data.get('cf_payment_id', '')
                 transaction.save()
-                print(f"Updated transaction {transaction.id} status to {transaction.status}")
+                print(f"⚠️ Payment not successful: {api_status}")
                 
-                return render(request, 'error.html', {'err_msg': 'Payment was not successful'})
+                return render(request, 'error.html', {
+                    'err_msg': f'Payment was not successful. Status: {api_status}'
+                })
                 
         except Exception as e:
-            print(f"Payment response processing error: {e}")
+            print(f"💥 Payment response processing error: {e}")
             import traceback
             traceback.print_exc()
             return JsonResponse({'message': f'Error processing payment response: {str(e)}'})
 
-
 class PaymentResponseTestView(APIView):
     def post(self, request):
         return JsonResponse({'response': request.POST.dict()})
+    
+    def get(self, request):
+        return JsonResponse({'response': request.GET.dict()})
