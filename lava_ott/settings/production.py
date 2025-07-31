@@ -1,4 +1,5 @@
 # settings/production.py
+import os
 from .base import *
 
 DEBUG = True
@@ -96,15 +97,12 @@ BY_PASS_VERIFY = False
 #     "test_mode": False,  # Production mode
 #     "api_version": "2022-09-01"
 # }
-# PAYMENT_CONFIG = {
-#     "key_id": 'rzp_live_KNVLFuRdQHF0Lu',
-#     "key_secret": 'jCmtb49N4bUK7qnuEsE31a2e'
-# }
+
+
 
 PAYMENT_CONFIG = {
-    'key_id': '79818249a83e188184b2d75955281897',
-    'key_secret': 'cfsk_ma_prod_728d9c870c640d503eeab6f13973a473_98c07237',
-    # Remove test_mode - it will be auto-detected from credentials
+    'key_id': os.getenv('CASHFREE_KEY_ID'),
+    'key_secret': os.getenv('CASHFREE_KEY_SECRET'),
 }
 
 PAYMENT_URL_CONFIG = {
