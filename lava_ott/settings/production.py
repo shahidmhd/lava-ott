@@ -1,9 +1,10 @@
+# settings/production.py
 from .base import *
 
 DEBUG = True
 
 # ALLOWED_HOSTS = ['lavaott.com', '164.52.200.90', 'www.lavaott.com']
-ALLOWED_HOSTS = ['api.lavaott.com', '164.52.200.90','127.0.0.1']
+ALLOWED_HOSTS = ['api.lavaott.com', '164.52.200.90','127.0.0.1', 'lavaott.com', 'www.lavaott.com']
 
 DATABASES = {
     'default': {
