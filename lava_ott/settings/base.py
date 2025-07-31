@@ -68,7 +68,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
     # local
-    'users.middleware.CustomMiddleWare',
+    # 'users.middleware.CustomMiddleWare',
 ]
 
 ROOT_URLCONF = 'lava_ott.urls'
